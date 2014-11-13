@@ -7,7 +7,7 @@ import argparse
 import configparser
 import errno
 
-__version__ = '1.0.0'
+__version__ = '2.0.0'
 
 def bold(msg):
     return '\033[1m{}\033[0m'.format(msg)
