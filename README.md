@@ -12,7 +12,7 @@ Installation on Fedora, RHEL, or CentOS
 ---
 
     sudo yum install -y python3-pip python3-dnf
-    sudo pip-python3 install -y git+git://github.com/pantheon-systems/pmr.git@master
+    sudo pip-python3 install git+git://github.com/pantheon-systems/pmr.git@master
 
 Doing a dry run
 ---
