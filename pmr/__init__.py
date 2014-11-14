@@ -172,10 +172,13 @@ def find_matches(items, whitelist, blacklist=None):
 
 def restart_services(services):
     for service in services:
-        print('Restarting {0}...'.format(service))
-        result = subprocess.check_output(['/usr/bin/systemctl', 'restart', service], stderr=subprocess.STDOUT)
+        print('Restarting {0}...'.format(service.name))
+        result = subprocess.check_output(['/usr/bin/systemctl', 'restart', service.name], stderr=subprocess.STDOUT)
         print(result)
-        print('    ...done')
+        if result:
+            print('    ...success')
+        else:
+            print('    ...failed')            
         time.sleep(5)
 
 def get_configuration():
@@ -216,7 +219,8 @@ def main():
     for unit in units.values():
         if unit.matches_strategy(strategies['unit']):
             unit.display(args.verbose)
-            services_to_restart.append(unit)
+            if unit.get_reasons():
+                services_to_restart.append(unit)
     for cmdline in cmdlines.values():
         if cmdline.matches_strategy(strategies['cmdline']):
             cmdline.display(args.verbose)
