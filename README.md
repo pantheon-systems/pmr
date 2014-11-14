@@ -36,3 +36,13 @@ Installation (for development) from a clone
 ---
 
     sudo python3 setup.py install
+
+Building, testing, and publishing
+---
+
+    sudo pip-python3 install wheel
+    python3 setup.py sdist
+    python3 setup.py bdist_wheel
+    python3 setup.py sdist upload [-r test]
+    python3 setup.py bdist_wheel upload [-r test]
+    pip-python3 install [-i https://testpypi.python.org/pypi] pmr
