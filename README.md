@@ -24,6 +24,15 @@ Restarting matched services
 
     sudo pmr
 
+Default /etc/pmr.ini
+---
+
+    [unit]
+    *.service = true
+
+    [cmdline]
+    * = true
+
 Installation (for development) from a clone
 ---
 
