@@ -12,10 +12,20 @@ __version__ = '2.0.0'
 def bold(msg):
     return '\033[1m{}\033[0m'.format(msg)
 
-class RunningUnit(object):
-    def __init__(self, unit_name):
-        self.unit_name = unit_name
+def header_okay(msg):
+    return '\033[92m\033[1m{}\033[0m'.format(msg)
+
+def header_failure(msg):
+    return '\033[91m\033[1m{}\033[0m'.format(msg)
+
+def header_warning(msg):
+    return '\033[93m\033[1m{}\033[0m'.format(msg)
+
+class Restartable(object):
+    def __init__(self, name, restart_command):
+        self.name = name
         self.reasons = set([])
+        self.restart_command = restart_command
 
     def append_reasons(self, reasons):
         self.reasons |= set(reasons)
@@ -23,12 +33,29 @@ class RunningUnit(object):
     def get_reasons(self):
         return self.reasons
 
-    def display(self):
-        print(bold('Unit: {}'.format(self.unit_name)))
+    def display(self, verbose=False):
+        if not self.get_reasons() and not verbose:
+            return
+        title = header_okay(self.name)
+        if self.get_reasons():
+            if self.restart_command is not None:
+                title = header_warning(self.name)
+            else:
+                title = header_failure(self.name)
+        print(title)
         if self.get_reasons():
             for reason in self.get_reasons():
-                print('   ∙ {}'.format(reason))
+                print('   ∙ {}'.format(reason))    
 
+class RunningUnit(Restartable):
+    def __init__(self, name):
+        restart_command = 'systemctl restart {}'.format(name)
+        super(RunningUnit, self).__init__(name, restart_command)
+
+class RunningCmdline(Restartable):
+    def __init__(self, name):
+        restart_command = None
+        super(RunningCmdline, self).__init__(name, restart_command)
 
 class RunningProcess(object):
     def __init__(self, pid):
@@ -92,9 +119,8 @@ class RunningProcess(object):
         if self.get_unit() is not False:
             print('  Unit: {}'.format(self.get_unit()))
         if self.get_cmdline() is not False:
-            print('  cmdline: {}'.format(self.get_cmdline()))
+            print('  Cmdline: {}'.format(self.get_cmdline()))
         if len(self.get_reasons()) > 0:
-            print('  Reasons to restart:')
             for reason in self.get_reasons():
                 print('   ∙ {}'.format(reason))
 
@@ -111,17 +137,32 @@ def get_units_from_processes(processes):
     units = {}
     for process in processes:
         unit_name = process.get_unit()
-        if unit_name is not None and len(process.get_reasons()):
+        if unit_name is not None:
             if units.get(unit_name) is None:
                 units[unit_name] = RunningUnit(unit_name)
             units[unit_name].append_reasons(process.get_reasons())
     return units
 
-def find_matches(services, whitelist):
+def get_cmdlines_from_processes(processes):
+    cmdlines = {}
+    for process in processes:
+        cmdline = process.get_cmdline()
+        if cmdline is not None:
+            if cmdlines.get(cmdline) is None:
+                cmdlines[cmdline] = RunningCmdline(cmdline)
+            cmdlines[cmdline].append_reasons(process.get_reasons())
+    return cmdlines
+
+def find_matches(services, whitelist, blacklist):
     matches = set()
     for whitelist_item in whitelist:
         restart_services = fnmatch.filter(services, whitelist_item)
         matches |= set(restart_services)
+
+    for blacklist_item in blacklist:
+        do_not_restart_services = fnmatch.filter(matches, blacklist_item)
+        matches -= set(do_not_restart_services)
+
     return matches
 
 def restart_services(services):
@@ -144,7 +185,7 @@ def get_configuration():
     try:
         strategies['unit'] = dict(config.items('unit'))
     except configparser.NoSectionError:
-        strategies['unit'] = {}
+        strategies['unit'] = {'*.service'}
     return strategies
 
 def main():
@@ -158,13 +199,15 @@ def main():
 
     processes = get_processes()
     units = get_units_from_processes(processes)
+    cmdlines = get_cmdlines_from_processes(processes)
 
-    if args.verbose:
-        for unit in units.values():
-            unit.display()
-        for process in processes:
-            if not process.get_unit():
-                process.display()
+    for unit in units.values():
+        unit.display(args.verbose)
+    for cmdline in cmdlines.values():
+        cmdline.display(args.verbose)
+    #for process in processes:
+    #    if not process.get_unit() and not process.get_cmdline():
+    #        process.display(args.verbose)
 
     #whitelist = ['atlas-nginx*', '*yggdrasil*', '*styx*', 'ssl_nginx*', '*hyperion*', '*resurrector*', '*endpoint*', 'nginx_valhalla*', 'nginx.service', 'graphite-web.service', 'carbon-*', 'haproxy_carbon_relay*', 'statsd*', 'munin_to_graphite*', 'pyinotify_*', 'yum-updatesd.service', 'php_fpm_*', 'pantheonssh_*', 'postfix.service', 'rsyslog.service', '*site_exp_mon*', 'nginx_*']
     #whitelisted = find_matches(services, whitelist)
@@ -174,5 +217,5 @@ def main():
     #print('Not Whitelisted:')
     #pprint.pprint(services.difference(whitelisted))
 
-    #if not args.dry_run:
-    #    restart_services(whitelisted)
+    if not args.dry_run:
+        restart_services(units.values())
