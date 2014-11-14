@@ -50,7 +50,7 @@ class Restartable(object):
     def matches_strategy(self, strategy):
         hit = False
         for match, effect in strategy.items():
-            if len(fnmatch.filter(self.name, match)) > 0:
+            if fnmatch.fnmatch(self.name, match):
                 if effect:
                     hit = True
                 else:
@@ -205,6 +205,7 @@ def main():
     args = parser.parse_args()
 
     strategies = get_configuration()
+    #print(strategies)
 
     processes = get_processes()
     units = get_units_from_processes(processes)
