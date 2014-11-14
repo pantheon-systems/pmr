@@ -47,6 +47,16 @@ class Restartable(object):
             for reason in self.get_reasons():
                 print('   ∙ {}'.format(reason))    
 
+    def matches_strategy(self, strategy):
+        hit = False
+        for match, effect in strategy.items():
+            if len(fnmatch.filter(self.name, match)) > 0:
+                if effect:
+                    hit = True
+                else:
+                    return False
+        return hit
+
 class RunningUnit(Restartable):
     def __init__(self, name):
         restart_command = 'systemctl restart {}'.format(name)
@@ -91,8 +101,6 @@ class RunningProcess(object):
                         self.cmdline = lines[0]
             except IOError as e:
                 print('  PID {} cmdline read error: {}'.format(self.pid, e))
-        if self.cmdline is None:
-            self.cmdline = False
         return self.cmdline
 
     def get_unit(self):
@@ -110,8 +118,6 @@ class RunningProcess(object):
                     print('  PID {} cgroups not readable.'.format(self.pid))
                 else:
                     print('  PID {} cgroups read error: {}'.format(self.pid, e))
-            if self.unit is None:
-                self.unit = False
         return self.unit
 
     def display(self):
@@ -153,15 +159,14 @@ def get_cmdlines_from_processes(processes):
             cmdlines[cmdline].append_reasons(process.get_reasons())
     return cmdlines
 
-def find_matches(services, whitelist, blacklist):
+def find_matches(items, whitelist, blacklist=None):
     matches = set()
     for whitelist_item in whitelist:
-        restart_services = fnmatch.filter(services, whitelist_item)
-        matches |= set(restart_services)
+        matches |= set(fnmatch.filter(items, whitelist_item))
 
-    for blacklist_item in blacklist:
-        do_not_restart_services = fnmatch.filter(matches, blacklist_item)
-        matches -= set(do_not_restart_services)
+    if blacklist:
+        for blacklist_item in blacklist:
+            matches -= set(fnmatch.filter(matches, blacklist_item))
 
     return matches
 
@@ -178,14 +183,19 @@ def get_configuration():
     config.read('/etc/pmr.ini')
 
     strategies = {}
+    strategies['cmdline'] = {}
     try:
-        strategies['cmdline'] = dict(config.items('cmdline'))
+        for key, value in dict(config.items('cmdline')).items():
+            strategies['cmdline'][key] = (value == 'true')
     except configparser.NoSectionError:
-        strategies['cmdline'] = {}
+        strategies['cmdline'] = {'*': True}
+
+    strategies['unit'] = {}
     try:
-        strategies['unit'] = dict(config.items('unit'))
+        for key, value in dict(config.items('unit')).items():
+            strategies['unit'][key] = (value == 'true')
     except configparser.NoSectionError:
-        strategies['unit'] = {'*.service'}
+        strategies['unit'] = {'*.service': True}
     return strategies
 
 def main():
@@ -195,27 +205,20 @@ def main():
     args = parser.parse_args()
 
     strategies = get_configuration()
-    print(strategies)
 
     processes = get_processes()
     units = get_units_from_processes(processes)
     cmdlines = get_cmdlines_from_processes(processes)
 
+    services_to_restart = []
+
     for unit in units.values():
-        unit.display(args.verbose)
+        if unit.matches_strategy(strategies['unit']):
+            unit.display(args.verbose)
+            services_to_restart.append(unit)
     for cmdline in cmdlines.values():
-        cmdline.display(args.verbose)
-    #for process in processes:
-    #    if not process.get_unit() and not process.get_cmdline():
-    #        process.display(args.verbose)
-
-    #whitelist = ['atlas-nginx*', '*yggdrasil*', '*styx*', 'ssl_nginx*', '*hyperion*', '*resurrector*', '*endpoint*', 'nginx_valhalla*', 'nginx.service', 'graphite-web.service', 'carbon-*', 'haproxy_carbon_relay*', 'statsd*', 'munin_to_graphite*', 'pyinotify_*', 'yum-updatesd.service', 'php_fpm_*', 'pantheonssh_*', 'postfix.service', 'rsyslog.service', '*site_exp_mon*', 'nginx_*']
-    #whitelisted = find_matches(services, whitelist)
-    #print('Whitelisted:')
-    #pprint.pprint(whitelisted)
-
-    #print('Not Whitelisted:')
-    #pprint.pprint(services.difference(whitelisted))
+        if cmdline.matches_strategy(strategies['cmdline']):
+            cmdline.display(args.verbose)
 
     if not args.dry_run:
-        restart_services(units.values())
+        restart_services(services_to_restart)

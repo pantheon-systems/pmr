@@ -11,7 +11,7 @@ Requirements
 Installation on Fedora, RHEL, or CentOS
 ---
 
-    sudo yum install -y python3-pip python3-dnf
+    sudo yum install -y python3-pip python3-dnf git
     sudo pip-python3 install git+git://github.com/pantheon-systems/pmr.git@master
 
 Doing a dry run
