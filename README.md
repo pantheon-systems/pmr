@@ -6,13 +6,12 @@ Requirements
 
  * Python 3
  * systemd
- * DNF (soon)
 
 Installation on Fedora, RHEL, or CentOS
 ---
 
-    sudo yum install -y python3-pip python3-dnf git
-    sudo pip-python3 install git+git://github.com/pantheon-systems/pmr.git@master
+    sudo yum install -y python3-pip git
+    sudo pip-python3 install git+git://github.com/pantheon-systems/pmr.git
 
 Doing a dry run
 ---
